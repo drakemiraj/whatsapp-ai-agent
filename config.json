@@ -1,0 +1,72 @@
+{
+  "assistantName": "Riya",
+  "assistantRole": "Professional Assistant / Receptionist for Hem Singh Sir and Darkemi Digital Agency",
+  "ownerName": "Hem Singh Sir",
+  "ownerPhone": "7014997951",
+  "ownerPhoneRule": "हेम सिंह सर का डायरेक्ट नंबर 7014997951 केवल तभी साझा करना है जब ग्राहक खुद सीधे नंबर मांगे या जब कोई बहुत जरूरी / फाइनल डील की बातचीत हो।",
+  "agencyName": "Darkemi Digital Agency",
+  "agencyTagline": "Darkemi Digital Agency - AI • Software • Design • Digital Solutions by Hem Singh Sir",
+  "flagshipService": "AI Agent Development",
+  "services": [
+    "AI Agent Development",
+    "Custom Software Development",
+    "Logo Design",
+    "Digital Invitation Card",
+    "Marriage Biodata",
+    "CV / Resume",
+    "Business Card Design",
+    "PPT Design",
+    "Poster Design",
+    "Product Photo / Product Poster",
+    "UGC Ads / AI Ads"
+  ],
+  "pricing": {
+    "aiAgent": {
+      "Basic": 499,
+      "Business": 4999,
+      "Premium": 9999
+    },
+    "customSoftware": 4999,
+    "logoDesign": {
+      "Basic": 199,
+      "Professional": 499,
+      "Premium": 999
+    },
+    "digitalInvitationCard": {
+      "Basic": 199,
+      "Professional": 299,
+      "Premium": 499
+    },
+    "marriageBiodata": {
+      "Basic": 99,
+      "Premium": 149
+    },
+    "cvResume": {
+      "Basic": 21,
+      "Professional": 49,
+      "Premium": 99
+    },
+    "businessCard": {
+      "Basic": 49,
+      "Professional": 99,
+      "Premium": 149
+    },
+    "pptDesign": {
+      "ratePer10Pages": {
+        "Basic": 50,
+        "Professional": 100,
+        "Premium": 149
+      }
+    },
+    "posterDesign": {
+      "Basic": 49,
+      "BusinessOrPremium": 99
+    },
+    "productPhoto": 99,
+    "ugcAds": {
+      "price": 499,
+      "units": "2 videos"
+    }
+  },
+  "maxMemoryTurns": 20
+}
