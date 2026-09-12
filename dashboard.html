@@ -1,0 +1,162 @@
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <title>Darkemi Digital Agency - Live Leads & Deals Dashboard</title>
+  <meta http-equiv="refresh" content="15">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 25px; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 15px; margin-bottom: 25px; }
+    h1 { margin: 0; font-size: 24px; color: #38bdf8; display: flex; align-items: center; gap: 10px; }
+    .sub { color: #94a3b8; font-size: 14px; margin-top: 5px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px; }
+    .stat-card { background: #1e293b; padding: 20px; border-radius: 14px; border: 1px solid #334155; }
+    .stat-num { font-size: 32px; font-weight: bold; margin-top: 5px; }
+    .stat-label { font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+    .card-total { border-left: 4px solid #38bdf8; }
+    .card-call { border-left: 4px solid #f59e0b; }
+    .card-progress { border-left: 4px solid #60a5fa; }
+    .card-closed { border-left: 4px solid #10b981; }
+    .card-rejected { border-left: 4px solid #ef4444; }
+    table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 14px; overflow: hidden; border: 1px solid #334155; }
+    th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid #334155; font-size: 14px; }
+    th { background: #0f172a; color: #cbd5e1; font-weight: 600; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; }
+    tr:hover { background: #283548; }
+    .badge { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block; }
+    .badge-call { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
+    .badge-progress { background: rgba(96, 165, 250, 0.2); color: #93c5fd; border: 1px solid #60a5fa; }
+    .badge-closed { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+    .badge-rejected { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+    .city-tag { background: #334155; color: #e2e8f0; padding: 2px 8px; border-radius: 6px; font-size: 12px; }
+    .live-dot { width: 10px; height: 10px; background: #10b981; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1><span class="live-dot"></span> Darkemi Digital Agency - Live Leads & Deals Dashboard</h1>
+      <div class="sub">Hem Singh Sir के लिए लाइव लीड्स और डील ट्रैकर (ऑटो-रिफ्रेश हर 15 सेकंड)</div>
+    </div>
+    <div style="text-align: right; color: #94a3b8; font-size: 13px;">
+      फ़ाइल: <b>leads.csv</b> | कुल दर्ज: <b>6</b>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card card-total">
+      <div class="stat-label">कुल लीड्स</div>
+      <div class="stat-num" style="color: #38bdf8;">6</div>
+    </div>
+    <div class="stat-card card-call">
+      <div class="stat-label">कॉल करनी है (Ready for Call)</div>
+      <div class="stat-num" style="color: #f59e0b;">2</div>
+    </div>
+    <div class="stat-card card-progress">
+      <div class="stat-label">बातचीत जारी (In Progress)</div>
+      <div class="stat-num" style="color: #60a5fa;">4</div>
+    </div>
+    <div class="stat-card card-closed">
+      <div class="stat-label">सफल / क्लोज डील</div>
+      <div class="stat-num" style="color: #10b981;">0</div>
+    </div>
+    <div class="stat-card card-rejected">
+      <div class="stat-label">रिजेक्टेड / मिसमैच</div>
+      <div class="stat-num" style="color: #ef4444;">0</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>समय</th>
+        <th>फोन नंबर</th>
+        <th>ग्राहक का नाम</th>
+        <th>शहर / लोकेशन</th>
+        <th>कैटेगरी</th>
+        <th>गाड़ी / सर्विस</th>
+        <th>बजट / कीमत</th>
+        <th>डील स्थिति</th>
+        <th>अंतिम रिमार्क्स / निष्कर्ष</th>
+      </tr>
+    </thead>
+    <tbody>
+      
+        <tr>
+          <td><small>12/9/2026, 10:44:06 am</small></td>
+          <td><b>120363399492571830</b></td>
+          <td>Unknown</td>
+          <td><span class="city-tag">None</span></td>
+          <td>Darkemi Digital Agency</td>
+          <td>AI Agent Development</td>
+          <td>None</td>
+          <td><span class="badge badge-progress">In Progress</span></td>
+          <td><small>User is continuously sending automated workshop reminder messages that are unrelated to Darkemi Digital Agency.</small></td>
+        </tr>
+      
+        <tr>
+          <td><small>12/9/2026, 10:04:52 am</small></td>
+          <td><b>919229646541</b></td>
+          <td>Mohammad ibran</td>
+          <td><span class="city-tag">none</span></td>
+          <td>Darkemi Digital Agency</td>
+          <td>Darkemi Enquiry</td>
+          <td>none</td>
+          <td><span class="badge badge-progress">In Progress</span></td>
+          <td><small>To know who Hem Singh Sir is</small></td>
+        </tr>
+      
+        <tr>
+          <td><small>12/9/2026, 8:10:45 am</small></td>
+          <td><b>919876543211</b></td>
+          <td>नेहा वर्मा (Neha Verma)</td>
+          <td><span class="city-tag">दिल्ली (Delhi)</span></td>
+          <td>Darkemi Digital Agency</td>
+          <td>PPT Design (20 Pages - Professional)</td>
+          <td>₹200</td>
+          <td><span class="badge badge-progress">In Progress</span></td>
+          <td><small>कॉर्पोरेट बिजनेस पिच डेक प्रेजेंटेशन</small></td>
+        </tr>
+      
+        <tr>
+          <td><small>12/9/2026, 8:50:12 am</small></td>
+          <td><b>919876543210</b></td>
+          <td>विकास चौधरी (Vikas Choudhary)</td>
+          <td><span class="city-tag">हिसार (Hisar)</span></td>
+          <td>Darkemi Digital Agency</td>
+          <td>Custom Software Development</td>
+          <td>₹4,999</td>
+          <td><span class="badge badge-call">Ready for Call</span></td>
+          <td><small>इन्वेंट्री व बिलिंग के लिए कस्टम सॉफ्टवेयर रिक्वायरमेंट</small></td>
+        </tr>
+      
+        <tr>
+          <td><small>12/9/2026, 9:15:20 am</small></td>
+          <td><b>919876500111</b></td>
+          <td>अमित कुमार (Amit Kumar)</td>
+          <td><span class="city-tag">अलवर (Alwar)</span></td>
+          <td>Darkemi Digital Agency</td>
+          <td>Logo Design (Premium Package)</td>
+          <td>₹999</td>
+          <td><span class="badge badge-progress">In Progress</span></td>
+          <td><small>क्लॉथिंग ब्रांड के लिए प्रीमियम 3D लोगो की आवश्यकता</small></td>
+        </tr>
+      
+        <tr>
+          <td><small>12/9/2026, 10:12:28 am</small></td>
+          <td><b>919521493129</b></td>
+          <td>Indian Hero</td>
+          <td><span class="city-tag">None</span></td>
+          <td>Darkemi Digital Agency</td>
+          <td>AI Agent Development</td>
+          <td>499</td>
+          <td><span class="badge badge-call">Ready for Call</span></td>
+          <td><small>respond warmly and respectfully, keeping the tone gentle and polite</small></td>
+        </tr>
+      
+    </tbody>
+  </table>
+</body>
+</html>
+    
