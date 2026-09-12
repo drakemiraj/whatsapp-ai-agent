@@ -52,7 +52,7 @@ function extractDeclaredName(text) {
   if (!text) return null;
   const t = text.trim();
   const patterns = [
-    /(?:mera\s+naam|my\s+name)\s+(?:hai\s+|is\s+)?([a-zA-Z\u0900-\u097F]{2,20})/i,
+    /(?:mera\s+naam|my\s+name|naam|name)\s+(?:hai\s+|is\s+)?([a-zA-Z\u0900-\u097F]{2,20})/i,
     /(?:main|mai|m)\s+([a-zA-Z\u0900-\u097F]{2,20})\s+(?:bol\s+raha|bol\s+rahi)/i,
     /^([a-zA-Z\u0900-\u097F]{2,20})\s+(?:bol\s+raha|bol\s+rahi)/i,
     /^i\s+am\s+([a-zA-Z\u0900-\u097F]{2,20})/i
@@ -279,34 +279,53 @@ async function generateAIResponse(rawPhoneNumber, incomingMessage = '', mediaDat
     return reply;
   }
 
-  // 4. Name Verification Check (If customer declares a name, check against saved phonebook name)
+  // 4. Fast Natural Courtesies & Pleasantries Handler (Thanks, Welcome, Everyday polite replies)
+  const isPureThanks = 
+    lowerMsg === 'thanks' || 
+    lowerMsg === 'thank you' || 
+    lowerMsg === 'thx' || 
+    lowerMsg === 'dhanyawad' || 
+    lowerMsg === 'dhanyawaad' || 
+    lowerMsg === 'धन्यवाद' || 
+    lowerMsg === 'शुक्रिया' || 
+    lowerMsg === 'shukriya' ||
+    lowerMsg === 'thanks riya' ||
+    lowerMsg === 'thank you riya' ||
+    lowerMsg === 'thank u';
+
+  const isDeclineWithThanks = 
+    lowerMsg === 'nhi thanks' || 
+    lowerMsg === 'nahi thanks' || 
+    lowerMsg === 'no thanks' || 
+    lowerMsg === 'no thank you' || 
+    lowerMsg === 'abhi nahi' || 
+    lowerMsg === 'abhi nhi' || 
+    lowerMsg === 'abhi nahi chahiye' || 
+    lowerMsg === 'nahi chahiye' ||
+    lowerMsg === 'nahi kuch nahi';
+
+  if (isPureThanks) {
+    recordMessage(phoneNumber, 'user', trimmed);
+    const reply = hasDevanagari
+      ? "आपका बहुत-बहुत स्वागत है! 😊 Darkemi Digital Agency से जुड़ने के लिए धन्यवाद। यदि आगे कभी भी किसी सर्विस की आवश्यकता हो, तो बेझिझक बताइएगा। आपका दिन शुभ हो! 🙏"
+      : "You're most welcome! 😊 Darkemi Digital Agency से जुड़ने के लिए बहुत-बहुत धन्यवाद। आगे जब भी किसी डिजिटल काम या AI सर्विस की ज़रूरत हो, बेझिझक संपर्क कीजिएगा। Have a great day! 🙏";
+    recordMessage(phoneNumber, 'model', reply);
+    return reply;
+  }
+
+  if (isDeclineWithThanks) {
+    recordMessage(phoneNumber, 'user', trimmed);
+    const reply = hasDevanagari
+      ? "जी, बिल्कुल कोई बात नहीं! 😊 जब भी आपको आगे किसी सर्विस या काम की आवश्यकता हो, आप कभी भी संपर्क कर सकते हैं। Darkemi Digital Agency में आपका हमेशा स्वागत है। आपका दिन शुभ हो! 🙏"
+      : "जी, बिल्कुल कोई बात नहीं! 😊 आगे जब भी आपको किसी काम या सहायता की ज़रूरत हो, आप कभी भी बेझिझक मैसेज कर सकते हैं। Darkemi Digital Agency में आपका हमेशा स्वागत है। Have a wonderful day! 🙏";
+    recordMessage(phoneNumber, 'model', reply);
+    return reply;
+  }
+
+  // 5. Update contact name if declared by customer
   const declaredName = extractDeclaredName(trimmed);
   if (declaredName) {
-    const contact = getContact(phoneNumber);
-    const savedName = (contact.name || '').trim();
-
-    // If already saved in phonebook with a verified name (not pure numbers)
-    if (savedName && savedName.length >= 2 && !/^\d+$/.test(savedName)) {
-      const normSaved = savedName.toLowerCase().replace(/[^a-z0-9\u0900-\u097F]/g, ' ');
-      const normDecl = declaredName.toLowerCase().replace(/[^a-z0-9\u0900-\u097F]/g, ' ');
-      const savedWords = normSaved.split(/\s+/).filter(w => w.length >= 2);
-      const declWords = normDecl.split(/\s+/).filter(w => w.length >= 2);
-
-      const isMatch = declWords.some(w => savedWords.includes(w)) || savedWords.some(w => declWords.includes(w));
-
-      if (!isMatch) {
-        // Customer stated a WRONG name that does not match phonebook record!
-        recordMessage(phoneNumber, 'user', trimmed);
-        const reply = hasDevanagari
-          ? "माफ़ कीजिए सर, हमारी लिस्ट / रिकॉर्ड में इस नंबर पर यह नाम दर्ज नहीं है। कृपया अपना सही नाम बता दीजिए।"
-          : "Maaf kijiye sir, hamari list / record mein is number par yeh naam darj nahi hai. Kripya apna sahi naam bata dijiye.";
-        recordMessage(phoneNumber, 'model', reply);
-        return reply;
-      }
-    } else {
-      // Not saved yet -> Add to contacts with verified name!
-      updateContact(phoneNumber, { name: declaredName });
-    }
+    updateContact(phoneNumber, { name: declaredName });
   }
 
   // 5. Abuse / Inappropriate conversation handling (3-tier progressive de-escalation)
@@ -505,13 +524,17 @@ ${mediaInstruction}
 
     recordMessage(phoneNumber, 'model', finalReply);
 
-    // Process Structured Lead Data internally
-    processLeadQualification(phoneNumber, trimmed, finalReply, analysis);
+    // Process Structured Lead Data internally (Protected against unhandled exceptions)
+    try {
+      processLeadQualification(phoneNumber, trimmed, finalReply, analysis);
+    } catch (procErr) {
+      console.error('[Lead Processing Non-Fatal Error]', procErr);
+    }
 
     return finalReply;
   } catch (error) {
-    console.error('[Agent Error]', error);
-    return "जी, आपकी बात नोट कर ली गई है। हेम सिंह सर जल्द ही आपसे संपर्क करेंगे।";
+    console.error('[Agent Fatal Error]', error);
+    return "जी 😊 मैं आपकी किस तरह सहायता कर सकती हूँ? आप किस बारे में बात करना चाहते हैं?";
   }
 }
 
@@ -553,9 +576,10 @@ function processLeadQualification(phoneNumber, userText, botReply, analysis = nu
     return;
   }
 
-  // Name extraction (Phonebook > WhatsApp PushName > Analysis > Verified intro)
+  // Name extraction (Explicitly Declared > AI Analysis > Phonebook Contact > Default)
+  const declared = extractDeclaredName(userText) || (analysis && analysis.customer_name && analysis.customer_name !== 'unknown' && analysis.customer_name !== 'None' ? analysis.customer_name : null);
   const savedName = getBestContactName(phoneNumber);
-  let customerName = savedName || (analysis && analysis.customer_name && analysis.customer_name !== 'unknown' ? analysis.customer_name : 'ग्राहक');
+  let customerName = declared || savedName || 'ग्राहक';
 
   // Service Name
   let serviceOrModel = 'Darkemi Enquiry';
