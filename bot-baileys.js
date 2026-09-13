@@ -1,4 +1,13 @@
 require('dotenv').config();
+
+// Global crash protection so the bot never terminates
+process.on('uncaughtException', (err) => {
+  console.warn('🛡️ [UncaughtException Handled]:', err.message);
+});
+process.on('unhandledRejection', (reason) => {
+  console.warn('🛡️ [UnhandledRejection Handled]:', reason?.message || reason);
+});
+
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
@@ -13,7 +22,7 @@ const config = require('./config.json');
 
 console.log('================================================================');
 console.log('🚀 Starting WhatsApp Business AI Agent - Riya (Hem Singh Sir / Darkemi Digital Agency)');
-console.log('⚡ Two-Layer Intelligence + Human Takeover + Lead Forwarding Active');
+console.log('⚡ Two-Layer Intelligence + Auto-Restart + Lead Forwarding Active');
 console.log('================================================================');
 
 const QR_HTML_PATH = path.join(__dirname, 'qr.html');
@@ -391,27 +400,33 @@ async function startBot() {
       // Generate AI Response with Riya
       const aiResponse = await generateAIResponse(remoteJid, rawText, mediaData);
 
-      // Send reply
-      await sock.sendMessage(remoteJid, { text: aiResponse });
-      sock.sendPresenceUpdate('paused', remoteJid).catch(() => {});
-
-      console.log(`📤 [रिया का रिप्लाई भेजा] -> ${realPhone}: "${aiResponse}"`);
+      // Send reply safely
+      try {
+        await sock.sendMessage(remoteJid, { text: aiResponse });
+        sock.sendPresenceUpdate('paused', remoteJid).catch(() => {});
+        console.log(`📤 [रिया का रिप्लाई भेजा] -> ${realPhone}: "${aiResponse}"`);
+      } catch (sendErr) {
+        console.warn(`⚠️ [संदेश भेजने में त्रुटि] -> ${realPhone}:`, sendErr.message);
+      }
 
       // Check if this lead needs an alert to Hem Singh Sir's personal WhatsApp
       try {
-        const leadsData = JSON.parse(fs.readFileSync(path.join(__dirname, 'leads.json'), 'utf-8'));
-        const thisLead = leadsData.find(l => l.phoneNumber === realPhone);
-        if (thisLead && (thisLead.dealStatus === 'Ready for Call' || thisLead.dealStatus === 'Deal Closed / Booked')) {
-          sendHotLeadAlert(
-            sock,
-            realPhone,
-            thisLead.customerName || 'ग्राहक',
-            thisLead.cityLocation || 'स्थान N/A',
-            thisLead.serviceOrModel || 'डील',
-            thisLead.budgetOrPrice || 'N/A',
-            thisLead.dealStatus,
-            thisLead.finalRemarks || ''
-          ).catch(() => {});
+        const leadsFile = path.join(__dirname, 'leads.json');
+        if (fs.existsSync(leadsFile)) {
+          const leadsData = JSON.parse(fs.readFileSync(leadsFile, 'utf-8'));
+          const thisLead = leadsData.find(l => l.phoneNumber === realPhone);
+          if (thisLead && (thisLead.dealStatus === 'Ready for Call' || thisLead.dealStatus === 'Deal Closed / Booked')) {
+            sendHotLeadAlert(
+              sock,
+              realPhone,
+              thisLead.customerName || 'ग्राहक',
+              thisLead.cityLocation || 'स्थान N/A',
+              thisLead.serviceOrModel || 'डील',
+              thisLead.budgetOrPrice || 'N/A',
+              thisLead.dealStatus,
+              thisLead.finalRemarks || ''
+            ).catch(() => {});
+          }
         }
       } catch (err) {}
     }
