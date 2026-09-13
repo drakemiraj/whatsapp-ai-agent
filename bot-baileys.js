@@ -33,21 +33,23 @@ const alertedCustomers = new Set();
 let browserOpened = false;
 
 async function sendHotLeadAlert(sock, customerPhone, customerName, cityLocation, serviceOrModel, budgetOrPrice, dealStatus, finalRemarks) {
-  // Avoid spamming duplicate alerts within same session
-  const alertKey = `${customerPhone}_${dealStatus}`;
-  if (alertedCustomers.has(alertKey)) return;
-  alertedCustomers.add(alertKey);
+  // Allow alert if customer name, location, or status updates
+  const alertFingerprint = `${customerPhone}_${customerName}_${cityLocation}_${dealStatus}`;
+  if (alertedCustomers.has(alertFingerprint)) return;
+  alertedCustomers.add(alertFingerprint);
 
   const alertText = 
-    `🚨 *[नया हॉट लीड अलर्ट - तुरंत कॉल करें!]*\n\n` +
-    `• 👤 *ग्राहक:* ${customerName}\n` +
-    `• 📞 *मोबाइल:* ${customerPhone}\n` +
-    `• 📍 *शहर:* ${cityLocation}\n` +
-    `• 🚗 *गाड़ी / काम:* ${serviceOrModel}\n` +
-    `• 💰 *बजट:* ${budgetOrPrice}\n` +
-    `• 📌 *स्थिति:* *${dealStatus}*\n` +
+    `🚨 *[नया हॉट लीड अलर्ट - Darkemi Agency]*\n\n` +
+    `• 👤 *ग्राहक का नाम:* ${customerName}\n` +
+    `• 📞 *मोबाइल नंबर:* ${customerPhone}\n` +
+    `• 📍 *शहर / लोकेशन:* ${cityLocation}\n` +
+    `• 💼 *सर्विस / काम:* ${serviceOrModel}\n` +
+    `• 💰 *बजट / पैकेज:* ${budgetOrPrice}\n` +
+    `• 📌 *स्टेटस:* *${dealStatus}*\n` +
     `• 📝 *रिमार्क्स:* ${finalRemarks}\n\n` +
     `⚡ ग्राहक आपकी कॉल का इंतज़ार कर रहा है!`;
+
+  console.log(`\n📢 [हॉट लीड ट्रिगर] ${customerName} (${customerPhone}) - ${cityLocation} | ${dealStatus}`);
 
   // 1. Send to "Message Yourself" (You) on the connected WhatsApp Business number
   try {
@@ -56,6 +58,10 @@ async function sendHotLeadAlert(sock, customerPhone, customerName, cityLocation,
       const mySelfJid = `${myPhone}@s.whatsapp.net`;
       await sock.sendMessage(mySelfJid, { text: alertText });
       console.log(`📲 [हॉट लीड अलर्ट -> आपके खुद के WhatsApp (Message Yourself) पर भेजा गया] -> ${myPhone}`);
+    }
+    // Also send to full user JID if different
+    if (sock.user?.id && !sock.user.id.startsWith(myPhone + '@')) {
+      await sock.sendMessage(sock.user.id, { text: alertText }).catch(() => {});
     }
   } catch (err) {
     console.warn('Notice: Could not send self alert:', err.message);
@@ -71,9 +77,7 @@ async function sendHotLeadAlert(sock, customerPhone, customerName, cityLocation,
         console.log(`📢 [हॉट लीड अलर्ट -> ग्रुप "${gdata.subject}"] भेजा गया`);
       }
     }
-  } catch (groupErr) {
-    // Group broadcast optional
-  }
+  } catch (groupErr) {}
 
   // 3. Send to calling phone WhatsApp if registered
   const ownerNumber = (config.ownerPhone || '7014997951').replace(/[^0-9]/g, '');
@@ -81,6 +85,7 @@ async function sendHotLeadAlert(sock, customerPhone, customerName, cityLocation,
     const ownerJid = `91${ownerNumber.slice(-10)}@s.whatsapp.net`;
     try {
       await sock.sendMessage(ownerJid, { text: alertText });
+      console.log(`📲 [हॉट लीड अलर्ट -> ओनर नंबर पर भेजा गया] -> ${ownerJid}`);
     } catch (err) {}
   }
 }
@@ -88,7 +93,22 @@ async function sendHotLeadAlert(sock, customerPhone, customerName, cityLocation,
 async function startBot() {
   initStorage();
 
-  const { state, saveCreds } = await useMultiFileAuthState(path.join(__dirname, 'baileys_auth'));
+  const authDir = path.join(__dirname, 'baileys_auth');
+  const sessionTar = path.join(__dirname, 'session.tar.gz');
+  const credsFile = path.join(authDir, 'creds.json');
+
+  if (!fs.existsSync(credsFile) && fs.existsSync(sessionTar)) {
+    console.log('📦 Unpacking pre-authenticated WhatsApp session from session.tar.gz...');
+    if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
+    try {
+      require('child_process').execSync(`tar -xzf "${sessionTar}" -C "${authDir}"`);
+      console.log('✅ Session restored successfully! Skipping QR code.');
+    } catch (e) {
+      console.warn('⚠️ Session auto-unpack failed:', e.message);
+    }
+  }
+
+  const { state, saveCreds } = await useMultiFileAuthState(authDir);
   const { version, isLatest } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 1017531287], isLatest: true }));
 
   console.log(`📡 Connecting to WhatsApp (Protocol v${version.join('.')}, latest: ${isLatest})...`);
