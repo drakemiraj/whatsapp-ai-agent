@@ -103,20 +103,6 @@ async function startBot() {
   initStorage();
 
   const authDir = path.join(__dirname, 'baileys_auth');
-  const sessionTar = path.join(__dirname, 'session.tar.gz');
-  const credsFile = path.join(authDir, 'creds.json');
-
-  if (!fs.existsSync(credsFile) && fs.existsSync(sessionTar)) {
-    console.log('📦 Unpacking pre-authenticated WhatsApp session from session.tar.gz...');
-    if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
-    try {
-      require('child_process').execSync(`tar -xzf "${sessionTar}" -C "${authDir}"`);
-      console.log('✅ Session restored successfully! Skipping QR code.');
-    } catch (e) {
-      console.warn('⚠️ Session auto-unpack failed:', e.message);
-    }
-  }
-
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
   const { version, isLatest } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 1017531287], isLatest: true }));
 
@@ -130,6 +116,25 @@ async function startBot() {
     browser: ['DRAKEMI AI Assistant', 'Chrome', '1.0.0'],
     generateHighQualityLinkPreview: true
   });
+
+  // 8-Digit Pairing Code (Phone पर बिना QR स्कैन के 5 सेकंड में लिंक करने के लिए)
+  if (!state.creds.registered) {
+    const rawNumber = (config.botPhone || config.ownerPhone || '6377768475').replace(/[^0-9]/g, '');
+    const phoneNumber = rawNumber.length === 10 ? `91${rawNumber}` : rawNumber;
+    setTimeout(async () => {
+      try {
+        const pairingCode = await sock.requestPairingCode(phoneNumber);
+        console.log('\n=============================================================');
+        console.log(`📲 WhatsApp 8-अंकों का पेयरिंग कोड: 👉  ${pairingCode}  👈`);
+        console.log('👉 WhatsApp खोलें -> Three dots (⋮) -> Linked Devices -> Link a Device');
+        console.log('👉 नीचे "Link with phone number instead" पर टैप करें');
+        console.log(`👉 यह 8 अंकों का कोड [ ${pairingCode} ] भरें!`);
+        console.log('=============================================================\n');
+      } catch (err) {
+        console.warn('Pairing code notice:', err.message);
+      }
+    }, 3000);
+  }
 
   sock.ev.on('creds.update', saveCreds);
 
