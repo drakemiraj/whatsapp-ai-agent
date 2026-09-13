@@ -113,7 +113,7 @@ async function startBot() {
     auth: state,
     logger: pino({ level: 'silent' }),
     printQRInTerminal: false,
-    browser: ['DRAKEMI AI Assistant', 'Chrome', '1.0.0'],
+    browser: ['Ubuntu', 'Chrome', '20.0.04'],
     generateHighQualityLinkPreview: true
   });
 
@@ -123,17 +123,18 @@ async function startBot() {
     const phoneNumber = rawNumber.length === 10 ? `91${rawNumber}` : rawNumber;
     setTimeout(async () => {
       try {
-        const pairingCode = await sock.requestPairingCode(phoneNumber);
+        const rawCode = await sock.requestPairingCode(phoneNumber);
+        const formattedCode = rawCode ? (rawCode.match(/.{1,4}/g)?.join('-') || rawCode) : rawCode;
         console.log('\n=============================================================');
-        console.log(`📲 WhatsApp 8-अंकों का पेयरिंग कोड: 👉  ${pairingCode}  👈`);
-        console.log('👉 WhatsApp खोलें -> Three dots (⋮) -> Linked Devices -> Link a Device');
-        console.log('👉 नीचे "Link with phone number instead" पर टैप करें');
-        console.log(`👉 यह 8 अंकों का कोड [ ${pairingCode} ] भरें!`);
+        console.log(`📲 WhatsApp 8-अंकों का पेयरिंग कोड: 👉  ${formattedCode}  👈`);
+        console.log('👉 अपने WhatsApp Business पर जाएँ -> Three dots (⋮) -> Linked Devices');
+        console.log('👉 "Link a Device" -> नीचे "Link with phone number instead" पर टैप करें');
+        console.log(`👉 यह 8 अंकों का कोड [ ${formattedCode} ] भरें! (60 सेकंड में)`);
         console.log('=============================================================\n');
       } catch (err) {
         console.warn('Pairing code notice:', err.message);
       }
-    }, 3000);
+    }, 2500);
   }
 
   sock.ev.on('creds.update', saveCreds);
