@@ -20,9 +20,16 @@ const { initStorage } = require('./leadsManager');
 const { resolveRealPhoneNumber, updateContact, getContact, getBestContactName } = require('./contactsManager');
 const config = require('./config.json');
 
+// Auto-acquire Termux Wake-Lock on start so phone CPU never sleeps
+try {
+  exec('termux-wake-lock', (err) => {
+    if (!err) console.log('🔋 [Auto Wake-Lock] Phone CPU Wake-Lock active 24/7 (Never sleeps)');
+  });
+} catch (e) {}
+
 console.log('================================================================');
 console.log('🚀 Starting WhatsApp Business AI Agent - Riya (Hem Singh Sir / Darkemi Digital Agency)');
-console.log('⚡ Two-Layer Intelligence + Auto-Restart + Lead Forwarding Active');
+console.log('⚡ 24/7 Unstoppable Master Agent + Auto-Restart + Heartbeat Active');
 console.log('================================================================');
 
 const QR_HTML_PATH = path.join(__dirname, 'qr.html');
@@ -217,19 +224,31 @@ async function startBot() {
     }
 
     if (connection === 'close') {
+      if (global.heartbeatTimer) clearInterval(global.heartbeatTimer);
       const statusCode = (lastDisconnect?.error)?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-      console.log(`⚠️ कनेक्शन रीसेट हुआ (${statusCode}), पुनः कनेक्ट किया जा रहा है...`);
+      console.log(`⚠️ [24/7 Self-Healing] कनेक्शन ड्रॉप हुआ (${statusCode}), 2 सेकंड में स्वतः पुनः कनेक्ट हो रहा है...`);
       if (shouldReconnect) {
         setTimeout(startBot, 2000);
       } else {
-        console.log('❌ डिवाइस लॉगआउट हो गया है। दोबारा लिंक करने के लिए स्कैन करें।');
+        console.log('❌ डिवाइस लॉगआउट हो गया है। 10 सेकंड में ऑटो-रिकवर की कोशिश जारी...');
+        setTimeout(startBot, 10000);
       }
     } else if (connection === 'open') {
       console.log('\n=============================================================');
       console.log('✅ WhatsApp Business AI Agent (रिया) सफलतापूर्वक कनेक्ट हो गया है!');
-      console.log('🛡️ फोनबुक नेम रिकग्निशन + 5 मिनट ऑटो-पॉज + विज़न AI एक्टिव');
+      console.log('🛡️ 24/7 Unstoppable Engine + Auto-Heartbeat (30s) + विज़न AI एक्टिव');
       console.log('=============================================================\n');
+
+      // 24/7 Keep-Alive Heartbeat Ping: Prevents mobile carrier / WiFi idle socket drops
+      if (global.heartbeatTimer) clearInterval(global.heartbeatTimer);
+      global.heartbeatTimer = setInterval(async () => {
+        try {
+          if (sock && sock.ws && sock.ws.isOpen) {
+            await sock.sendPresenceUpdate('available');
+          }
+        } catch (e) {}
+      }, 30000);
 
       const successHtml = `
 <!DOCTYPE html>
