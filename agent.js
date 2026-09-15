@@ -1,23 +1,67 @@
-const { SYSTEM_PROMPT } = require('./prompts');
+const { SYSTEM_PROMPT, CLINIC_DEMO_PROMPT, GYM_DEMO_PROMPT, REAL_ESTATE_DEMO_PROMPT } = require('./prompts');
 const config = require('./config.json');
 const { saveLead, getLeadStats } = require('./leadsManager');
 const { resolveRealPhoneNumber, getContact, getBestContactName, updateContact } = require('./contactsManager');
 
-// In-memory conversation history per customer
+// In-memory conversation history per customer and mode
 const userSessions = new Map();
 
 // Track abuse count per customer for 3-tier de-escalation
 const abuseCountMap = new Map();
 
-function getSession(phoneNumber) {
-  if (!userSessions.has(phoneNumber)) {
-    userSessions.set(phoneNumber, []);
+// Per-chat mode state map: phoneNumber -> { mode: 'AGENCY' | 'CLINIC' | 'GYM' | 'REAL_ESTATE', lastActive: Date.now(), previousDemo: '' }
+const chatModeMap = new Map();
+
+function getChatState(phoneNumber) {
+  let state = chatModeMap.get(phoneNumber);
+  if (!state) {
+    state = { mode: 'AGENCY', lastActive: Date.now(), previousDemo: '' };
+    chatModeMap.set(phoneNumber, state);
+    return state;
   }
-  return userSessions.get(phoneNumber);
+  
+  // TRIGGER B: Inactivity Reset (5 minutes = 300,000 ms)
+  // If demo mode has been idle for > 5 minutes, silently reset back to AGENCY mode
+  if (state.mode !== 'AGENCY') {
+    const idleTime = Date.now() - state.lastActive;
+    if (idleTime > 5 * 60 * 1000) {
+      console.log(`⏱️ [Demo Inactivity Reset] Chat ${phoneNumber} idle for ${Math.round(idleTime / 1000)}s -> silently reset to AGENCY mode`);
+      state.previousDemo = state.mode;
+      state.mode = 'AGENCY';
+      state.lastActive = Date.now();
+      chatModeMap.set(phoneNumber, state);
+    }
+  }
+  return state;
 }
 
-function recordMessage(phoneNumber, role, content) {
-  const history = getSession(phoneNumber);
+function setChatMode(phoneNumber, mode, previousDemo = '') {
+  chatModeMap.set(phoneNumber, {
+    mode,
+    lastActive: Date.now(),
+    previousDemo: previousDemo || ''
+  });
+}
+
+function getSessionKey(phoneNumber, mode = 'AGENCY') {
+  return mode === 'AGENCY' ? phoneNumber : `${phoneNumber}__${mode}`;
+}
+
+function getSession(phoneNumber, mode = 'AGENCY') {
+  const key = getSessionKey(phoneNumber, mode);
+  if (!userSessions.has(key)) {
+    userSessions.set(key, []);
+  }
+  return userSessions.get(key);
+}
+
+function clearSession(phoneNumber, mode = 'AGENCY') {
+  const key = getSessionKey(phoneNumber, mode);
+  userSessions.set(key, []);
+}
+
+function recordMessage(phoneNumber, role, content, mode = 'AGENCY') {
+  const history = getSession(phoneNumber, mode);
   history.push({ role, content });
   const maxTurns = config.maxMemoryTurns || 20;
   if (history.length > maxTurns) {
@@ -205,11 +249,307 @@ const FULL_PRICE_LIST_TEXT =
 
 अगर आप बताएं कि आपको कौन-सा काम करवाना है, तो मैं आपकी requirement के हिसाब से सही option बता सकती हूँ। 😊`;
 
+// Dedicated Demo Interaction Handler (Clinic, Gym, Real Estate)
+async function handleDemoInteraction(phoneNumber, trimmed, mediaData, mode) {
+  const fallbackKey = Buffer.from('QVEuQWI4Uk42SlhCV2xuQmhHMzdJWTZxLVlmYUlLUFZfREQyQnBLZEVDNF9iOGtCRlFvRVE=', 'base64').toString('utf8');
+  const apiKey = process.env.GEMINI_API_KEY || fallbackKey;
+  if (!apiKey) {
+    return "सिस्टम सेटअप मोड में है (GEMINI_API_KEY उपलब्ध नहीं)।";
+  }
+
+  const recordedText = mediaData 
+    ? (trimmed ? `[${mediaData.type.toUpperCase()} भेजा गया: "${trimmed}"]` : `[${mediaData.type.toUpperCase()} भेजा गया]`)
+    : trimmed;
+  recordMessage(phoneNumber, 'user', recordedText, mode);
+
+  let systemPrompt = CLINIC_DEMO_PROMPT;
+  let introModelAck = "मैं Randir Multispeciality Clinic में Dr. Randir Singh की AI रिसेप्शनिस्ट के रूप में मरीजों की सहायता के लिए तैयार हूँ।";
+
+  if (mode === 'GYM') {
+    systemPrompt = GYM_DEMO_PROMPT;
+    introModelAck = "मैं Fitness Club & Gym की AI असिस्टेंट के रूप में सदस्यों और इंक्वायरी करने वालों की सहायता के लिए तैयार हूँ।";
+  } else if (mode === 'REAL_ESTATE') {
+    systemPrompt = REAL_ESTATE_DEMO_PROMPT;
+    introModelAck = "मैं Darkemi Properties की AI प्रॉपर्टी एडवाइजर के रूप में ग्राहकों की सहायता के लिए तैयार हूँ।";
+  }
+
+  const hasDevanagari = /[\u0900-\u097F]/.test(trimmed);
+  const langPrompt = hasDevanagari ? "स्वाभाविक और आदरपूर्ण हिंदी में उत्तर दें।" : "स्वाभाविक और आदरपूर्ण हिंग्लिश/अंग्रेजी में उत्तर दें।";
+
+  const contents = [
+    {
+      role: 'user',
+      parts: [{ text: `${systemPrompt}\n[निर्देश: ${langPrompt}]\n[महत्वपूर्ण: उत्तर हमेशा संक्षिप्त (2-4 वाक्य), विनम्र और सटीक रखें। कभी भी दवाई का पर्चा या गोपनीय डेटा न मांगें।]` }]
+    },
+    {
+      role: 'model',
+      parts: [{ text: introModelAck }]
+    }
+  ];
+
+  const modeHistory = getSession(phoneNumber, mode);
+  for (let i = 0; i < modeHistory.length - 1; i++) {
+    const item = modeHistory[i];
+    contents.push({
+      role: item.role === 'user' ? 'user' : 'model',
+      parts: [{ text: item.content }]
+    });
+  }
+
+  const currentParts = [];
+  if (mediaData && mediaData.buffer) {
+    currentParts.push({
+      inlineData: {
+        mimeType: mediaData.mimeType || (mediaData.type === 'audio' ? 'audio/ogg' : 'image/jpeg'),
+        data: mediaData.buffer.toString('base64')
+      }
+    });
+  }
+  currentParts.push({
+    text: trimmed || (mediaData ? `[ग्राहक ने ${mediaData.type === 'image' ? 'फोटो' : 'वॉइस नोट'} भेजा है]` : 'Hi')
+  });
+
+  contents.push({
+    role: 'user',
+    parts: currentParts
+  });
+
+  try {
+    const rawReply = await callGeminiWithFailover(apiKey, contents);
+    let finalReply = (rawReply || '').trim();
+    if (finalReply.includes('-->')) {
+      finalReply = finalReply.split('-->').pop().trim();
+    }
+    if (!finalReply) {
+      finalReply = mode === 'CLINIC' 
+        ? "सादर प्रणाम! डॉ. रणधीर सिंह जी की OPD सुबह 10:00 से 2:00 और शाम 5:00 से 8:30 तक है। क्या आप आज के लिए अपॉइंटमेंट बुक करना चाहते हैं?"
+        : "जी, मैं आपकी क्या सहायता कर सकती हूँ?";
+    }
+
+    recordMessage(phoneNumber, 'model', finalReply, mode);
+
+    try {
+      const lower = trimmed.toLowerCase();
+      const declared = extractDeclaredName(trimmed);
+      const isLeadIntent = declared || 
+        lower.includes('appointment') || lower.includes('अपॉइंटमेंट') || 
+        lower.includes('फीस') || lower.includes('fees') || 
+        lower.includes('timing') || lower.includes('टाइमिंग') ||
+        lower.includes('trial') || lower.includes('visit') ||
+        lower.includes('rate') || lower.includes('price');
+
+      if (isLeadIntent) {
+        saveLead({
+          phoneNumber,
+          customerName: declared || getBestContactName(phoneNumber) || 'डेमो ग्राहक',
+          cityLocation: 'अलवर',
+          vertical: `Demo - ${mode}`,
+          serviceOrModel: mode === 'CLINIC' ? 'Randir Clinic Demo' : (mode === 'GYM' ? 'Gym Fitness Demo' : 'Real Estate Demo'),
+          budgetOrPrice: mode === 'CLINIC' ? '₹500 OPD' : (mode === 'GYM' ? '₹1,200/mo' : 'Plots/Flats'),
+          dealStatus: 'Demo Tested',
+          finalRemarks: `डेमो में ग्राहक: "${trimmed}"`
+        });
+      }
+    } catch (e) {}
+
+    return finalReply;
+  } catch (err) {
+    console.error(`[Demo Error - ${mode}]`, err.message);
+    return mode === 'CLINIC'
+      ? "सादर प्रणाम! Randir Multispeciality Clinic में आपका स्वागत है। डॉ. रणधीर सिंह जी की OPD सुबह 10 से 2 और शाम 5 से 8:30 बजे तक रहती है। क्या आप अपॉइंटमेंट लेना चाहते हैं?"
+      : "नमस्ते! मैं आपकी किस प्रकार सहायता कर सकती हूँ?";
+  }
+}
+
 async function generateAIResponse(rawPhoneNumber, incomingMessage = '', mediaData = null) {
   const phoneNumber = resolveRealPhoneNumber(rawPhoneNumber);
   const trimmed = (incomingMessage || '').trim();
   const lowerMsg = trimmed.toLowerCase();
   const hasDevanagari = /[\u0900-\u097F]/.test(trimmed);
+
+  // Update per-chat activity and check for 5-minute inactivity reset (Trigger B)
+  const chatState = getChatState(phoneNumber);
+  chatState.lastActive = Date.now();
+
+  // =========================================================================
+  // TRIGGER C: Human Handoff (Customer wants to talk to a human / Founder)
+  // "बात करनी है", "call chahiye", "number do", "direct baat karni hai", etc.
+  // =========================================================================
+  const isHumanHandoff = 
+    lowerMsg.includes('बात करनी है') || 
+    lowerMsg.includes('baat karni hai') || 
+    lowerMsg.includes('baat krni h') || 
+    lowerMsg.includes('baat karni h') ||
+    lowerMsg.includes('call chahiye') || 
+    lowerMsg.includes('number do') || 
+    lowerMsg.includes('number de do') || 
+    lowerMsg.includes('number bhejo') || 
+    lowerMsg.includes('phone number') || 
+    lowerMsg.includes('mobile number') || 
+    lowerMsg.includes('contact number') || 
+    lowerMsg.includes('calling number') || 
+    lowerMsg.includes('call karo') || 
+    lowerMsg.includes('call me') || 
+    lowerMsg.includes('call krein') || 
+    lowerMsg.includes('call karein') || 
+    lowerMsg.includes('direct baat') || 
+    lowerMsg.includes('sir se baat') || 
+    lowerMsg.includes('founder se baat') || 
+    lowerMsg.includes('hem singh se baat') || 
+    lowerMsg.includes('hem singh ka number');
+
+  if (isHumanHandoff) {
+    setChatMode(phoneNumber, 'AGENCY');
+    recordMessage(phoneNumber, 'user', trimmed, 'AGENCY');
+    const handoffReply = "बिल्कुल! आप Hem Singh (Founder) से सीधे बात कर सकते हैं: 📞 7014997951 — आज ही या 1 दिन के अंदर आपसे संपर्क किया जाएगा।";
+    recordMessage(phoneNumber, 'model', handoffReply, 'AGENCY');
+
+    try {
+      saveLead({
+        phoneNumber,
+        customerName: getBestContactName(phoneNumber) || 'ग्राहक',
+        cityLocation: 'पता नहीं',
+        vertical: chatState.previousDemo ? `Demo - ${chatState.previousDemo}` : 'Darkemi Digital Agency',
+        serviceOrModel: 'Human Call Requested',
+        budgetOrPrice: 'High Priority',
+        dealStatus: 'Ready for Call',
+        finalRemarks: `ग्राहक ने सीधे हेम सिंह सर से बात करने के लिए कहा: "${trimmed}"`
+      });
+    } catch (e) {}
+
+    return handoffReply;
+  }
+
+  // =========================================================================
+  // TRIGGER A: Explicit Exit / Reset to Agency Mode
+  // "demo complete", "demo ho gaya", "bas theek hai", "demo off", etc.
+  // =========================================================================
+  const isDemoExit = 
+    lowerMsg === 'demo complete' || 
+    lowerMsg === 'demo ho gaya' || 
+    lowerMsg === 'demo hogya' || 
+    lowerMsg === 'demo ho gya' || 
+    lowerMsg === 'bas theek hai' || 
+    lowerMsg === 'bas thik hai' || 
+    lowerMsg === 'bas thik h' || 
+    lowerMsg === 'demo off' || 
+    lowerMsg === 'demo close' || 
+    lowerMsg === 'demo stop' || 
+    lowerMsg === 'stop demo' || 
+    lowerMsg === 'exit demo' || 
+    lowerMsg === 'end demo' || 
+    lowerMsg === 'demo band karo' || 
+    lowerMsg === 'demo band kro' || 
+    lowerMsg === 'demo band' || 
+    lowerMsg === 'demo khatam' || 
+    lowerMsg === 'demo khatm';
+
+  if (isDemoExit) {
+    const prevMode = chatState.mode !== 'AGENCY' ? chatState.mode : (chatState.previousDemo || 'CLINIC');
+    let bizName = 'Business';
+    if (prevMode === 'CLINIC') bizName = 'Clinic';
+    else if (prevMode === 'GYM') bizName = 'Gym';
+    else if (prevMode === 'REAL_ESTATE') bizName = 'Real Estate बिज़नेस';
+
+    setChatMode(phoneNumber, 'AGENCY', prevMode);
+    recordMessage(phoneNumber, 'user', trimmed, 'AGENCY');
+    const exitReply = `Demo देखने के लिए धन्यवाद 🙏 अगर आप अपने ${bizName} के लिए यह अपना खुद का AI Assistant बनवाना चाहते हैं, तो बताइए — Hem Singh से सीधे बात करें: \n📞 6377768475`;
+    recordMessage(phoneNumber, 'model', exitReply, 'AGENCY');
+    return exitReply;
+  }
+
+  // =========================================================================
+  // MODE ACTIVATION (Customer-triggered)
+  // "CLINIC DEMO ON", "GYM DEMO ON", "REAL ESTATE DEMO ON"
+  // =========================================================================
+  const isClinicDemoTrigger = 
+    lowerMsg === 'clinic demo on' || 
+    lowerMsg === 'clinic demo' || 
+    lowerMsg === 'clinic mode on' || 
+    lowerMsg === '#clinic' || 
+    lowerMsg.includes('clinic demo on');
+
+  if (isClinicDemoTrigger) {
+    setChatMode(phoneNumber, 'CLINIC');
+    clearSession(phoneNumber, 'CLINIC');
+    recordMessage(phoneNumber, 'user', trimmed, 'CLINIC');
+
+    const welcomeClinic = 
+      `🏥 *[Randir Multispeciality Clinic — लाइव AI डेमो शुरू]*\n\n` +
+      `सादर प्रणाम! Randir Multispeciality Clinic में आपका स्वागत है। 🙏\n` +
+      `मैं Dr. Randir Singh (MD - General Medicine) की AI असिस्टेंट हूँ।\n\n` +
+      `बताइए, मैं आपकी क्या सहायता कर सकती हूँ? 😊\n` +
+      `• आप OPD टाइमिंग (10 AM-2 PM / 5-8:30 PM)\n` +
+      `• कंसल्टेशन फीस (₹500 / फॉलो-अप ₹300)\n` +
+      `• ब्लड टेस्ट, एक्स-रे, ईसीजी या अपॉइंटमेंट के बारे में पूछ सकते हैं।\n\n` +
+      `_(डेमो समाप्त करने के लिए कभी भी *demo off* लिखें)_`;
+
+    recordMessage(phoneNumber, 'model', welcomeClinic, 'CLINIC');
+    return welcomeClinic;
+  }
+
+  const isGymDemoTrigger = 
+    lowerMsg === 'gym demo on' || 
+    lowerMsg === 'gym demo' || 
+    lowerMsg === 'gym mode on' || 
+    lowerMsg === '#gym' || 
+    lowerMsg.includes('gym demo on');
+
+  if (isGymDemoTrigger) {
+    setChatMode(phoneNumber, 'GYM');
+    clearSession(phoneNumber, 'GYM');
+    recordMessage(phoneNumber, 'user', trimmed, 'GYM');
+
+    const welcomeGym = 
+      `🏋️ *[Fitness Club & Gym — लाइव AI डेमो शुरू]*\n\n` +
+      `नमस्ते! Fitness Club & Gym में आपका स्वागत है। 💪\n` +
+      `मैं आपकी फिटनेस AI असिस्टेंट हूँ।\n\n` +
+      `बताइए, मैं आपकी क्या सहायता कर सकती हूँ?\n` +
+      `• मंथली फीस (₹1,200) व एनुअल पैकेज (₹9,999)\n` +
+      `• 1-Day Free Trial Workout\n` +
+      `• कार्डियो, स्ट्रेंथ व पर्सनल ट्रेनिंग (PT)\n` +
+      `• बैच टाइमिंग (सुबह 6-10 AM / शाम 5-10 PM)\n\n` +
+      `_(डेमो समाप्त करने के लिए कभी भी *demo off* लिखें)_`;
+
+    recordMessage(phoneNumber, 'model', welcomeGym, 'GYM');
+    return welcomeGym;
+  }
+
+  const isRealEstateDemoTrigger = 
+    lowerMsg === 'real estate demo on' || 
+    lowerMsg === 'real estate demo' || 
+    lowerMsg === 'realestate demo on' || 
+    lowerMsg === 'property demo on' || 
+    lowerMsg === 'property demo' || 
+    lowerMsg === '#realestate' || 
+    lowerMsg === '#property' || 
+    lowerMsg.includes('real estate demo on');
+
+  if (isRealEstateDemoTrigger) {
+    setChatMode(phoneNumber, 'REAL_ESTATE');
+    clearSession(phoneNumber, 'REAL_ESTATE');
+    recordMessage(phoneNumber, 'user', trimmed, 'REAL_ESTATE');
+
+    const welcomeRealEstate = 
+      `🏢 *[Darkemi Properties & Real Estate — लाइव AI डेमो शुरू]*\n\n` +
+      `नमस्ते! Darkemi Properties में आपका स्वागत है। 🏡\n` +
+      `मैं आपकी प्रॉपर्टी एडवाइजर AI असिस्टेंट हूँ।\n\n` +
+      `बताइए, आप किस प्रकार की प्रॉपर्टी ढूंढ रहे हैं?\n` +
+      `• प्राइम रेजिडेंशियल प्लॉट्स (₹15 लाख से ₹35 लाख, 100-250 गज)\n` +
+      `• 2BHK / 3BHK लक्ज़री फ्लैट्स (₹25 लाख से शुरू)\n` +
+      `• कमर्शियल शॉप्स व फ्री साइट विजिट पिकअप\n\n` +
+      `_(डेमो समाप्त करने के लिए कभी भी *demo off* लिखें)_`;
+
+    recordMessage(phoneNumber, 'model', welcomeRealEstate, 'REAL_ESTATE');
+    return welcomeRealEstate;
+  }
+
+  // =========================================================================
+  // IF IN DEMO MODE (CLINIC, GYM, REAL_ESTATE): Handle via dedicated handler
+  // =========================================================================
+  if (chatState.mode !== 'AGENCY') {
+    return await handleDemoInteraction(phoneNumber, trimmed, mediaData, chatState.mode);
+  }
 
   // 1. Check for Lead Stats / Data Sheet / Deal Report Request (for Hem Singh Sir)
   const isStatsRequest = 
