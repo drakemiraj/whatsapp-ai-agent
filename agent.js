@@ -158,9 +158,8 @@ const FULL_PRICE_LIST_TEXT =
 `जी 😊 Darkemi की current pricing:
 
 🤖 AI Agent Development
-• Basic — ₹499
-• Business — ₹4,999
-• Premium — ₹9,999
+• Normal — ₹1,499
+• Premium — ₹19,900
 
 💻 Custom Software Development
 • ₹4,999
