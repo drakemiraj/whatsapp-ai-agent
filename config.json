@@ -23,9 +23,8 @@
   ],
   "pricing": {
     "aiAgent": {
-      "Basic": 499,
-      "Business": 4999,
-      "Premium": 9999
+      "Normal": 1499,
+      "Premium": 19900
     },
     "customSoftware": 4999,
     "logoDesign": {
