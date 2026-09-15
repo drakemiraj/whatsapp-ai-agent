@@ -323,6 +323,12 @@ async function startBot() {
       // =========================================================================
       // 2. INCOMING CUSTOMER MESSAGE: Check if this chat is paused
       // =========================================================================
+      const isGreetingOrTest = ['hi', 'hello', 'hey', 'test', 'namaste', '#start', 'continue riya', 'चालू रिया', 'शुरू रिया', 'start'].includes(lowerText);
+      if (isGreetingOrTest) {
+        pausedChats.delete(remoteJid);
+        pausedChats.delete(realPhone);
+      }
+
       const pauseUntil = pausedChats.get(remoteJid) || pausedChats.get(realPhone);
       if (pauseUntil) {
         if (pauseUntil === Infinity || Date.now() < pauseUntil) {
