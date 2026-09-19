@@ -231,8 +231,11 @@ async function startBot() {
       if (shouldReconnect) {
         setTimeout(startBot, 2000);
       } else {
-        console.log('❌ डिवाइस लॉगआउट हो गया है। 10 सेकंड में ऑटो-रिकवर की कोशिश जारी...');
-        setTimeout(startBot, 10000);
+        console.log('❌ डिवाइस लॉगआउट हो गया है। पुराना अमान्य सेशन साफ़ करके नया पेयरिंग कोड जनरेट किया जा रहा है...');
+        try {
+          fs.rmSync(authDir, { recursive: true, force: true });
+        } catch (e) {}
+        setTimeout(startBot, 2000);
       }
     } else if (connection === 'open') {
       console.log('\n=============================================================');
